@@ -1,0 +1,82 @@
+# Visit https://github.com/github/codeql-action to learn how-to use
+# and analysis source code to find security vulnerabilities.
+
+name: "CodeQL Analysis dotNET"
+run-name: "CodeQL analysis dotNET changes by @${{ github.actor }}"
+on:
+  workflow_dispatch:
+  push:
+    branches: ['**']
+    paths:
+      - '**.cs'
+      - '**.cshtml'
+      - '**.csproj'
+      - '**.sln'
+      - '**.xaml'
+  pull_request:
+    branches: ['**']
+    paths:
+      - '**.cs'
+      - '**.cshtml'
+      - '**.csproj'
+      - '**.sln'
+      - '**.xaml'
+  # schedule:
+  #   # Use the following to schedule this workflow
+  #   # <minute> <hour> <day> <month> <day_of_week>
+  #   - cron: '0 8 * * 3'
+
+permissions:
+  contents: write  # Required to use GitHub Workflow actions
+  id-token: write  # Required to request an OpenID Connect token
+
+env:
+  GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+  SDK_VERSION: "9.0.x"  # Required SDK version to build release
+
+jobs:
+  analyze:
+    name: "CodeQL Analysis dotNET"
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['csharp']
+
+    steps:
+      - name: "Checkout"
+        id: checkout
+        uses: actions/checkout@v5
+
+      - name: "Confirm pull-request"
+        id: confirm-pull-request
+        run: git checkout HEAD^2
+        if: ${{ github.event_name }} == 'pull_request'
+
+      # - name: "Setup dotNET"
+      #   id: setup-dotnet
+      #   uses: actions/setup-dotnet@v4
+      #   with:
+      #     dotnet-version: "${{ env.SDK_VERSION }}"
+
+      # - name: "Create settings"
+      #   id: create-settings
+      #   run: |
+      #     touch "${{ github.workspace }}/example/project1/appsettings.json"
+      #     touch "${{ github.workspace }}/example/project2/appsettings.json"
+      #     touch "${{ github.workspace }}/example/project3/appsettings.json"
+
+      - name: "Initialize CodeQL"
+        id: initialize-codeql
+        uses: github/codeql-action/init@v3
+        with:
+          languages: "${{ matrix.language }}"
+
+      - name: "Build project"
+        id: build-project
+        uses: github/codeql-action/autobuild@v3
+
+      - name: "Perform analysis"
+        id: perform-analysis
+        uses: github/codeql-action/analyze@v3

@@ -1,0 +1,38 @@
+# Visit https://docs.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
+# for more information about the configuration options for dependency updates
+
+# Visit https://containers.dev/guide/dependabot for more information about using
+# GitHub Dependabot version updates and learn package ecosystems are supported
+
+version: 2
+# registries:
+#   docker:
+#     type: docker-repository
+#     url: https://docker.io/example/project
+#     username: "${{ secrets.DOCKER_USERNAME }}"
+#     password: "${{ secrets.DOCKER_TOKEN }}"
+
+updates:
+  - package-ecosystem: "docker"
+    directories:
+      - "/"
+      - "/docker"
+      - "/podman"
+    schedule:
+      interval: "daily"
+    assignees: ["@robertlarocca"]
+    groups:
+      docker:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "github-actions"
+    directories:
+      - "/"
+    schedule:
+      interval: "daily"
+    assignees: ["@robertlarocca"]
+    groups:
+      github:
+        patterns:
+          - "*"

@@ -1,0 +1,55 @@
+{
+  "name": "pre-release",
+  "target": "tag",
+  "source_type": "Repository",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "exclude": [],
+      "include": [
+        "refs/tags/!v[0-9]+.[0-9]+.[0-9]+",
+        "refs/tags/!v20[0-9][0-9][0-1][0-9][0-3][0-9]",
+        "refs/tags/alpha/v[0-9]+.[0-9]+.[0-9]+**",
+        "refs/tags/alpha/v20[0-9][0-9][0-1][0-9][0-3][0-9]**",
+        "refs/tags/beta/v[0-9]+.[0-9]+.[0-9]+**",
+        "refs/tags/beta/v20[0-9][0-9][0-1][0-9][0-3][0-9]**",
+        "refs/tags/devel/v[0-9]+.[0-9]+.[0-9]+**",
+        "refs/tags/devel/v20[0-9][0-9][0-1][0-9][0-3][0-9]**",
+        "refs/tags/test/v[0-9]+.[0-9]+.[0-9]+**",
+        "refs/tags/test/v20[0-9][0-9][0-1][0-9][0-3][0-9]**",
+        "refs/tags/v[0-9]+.[0-9]+.[0-9]+-alpha*",
+        "refs/tags/v[0-9]+.[0-9]+.[0-9]+-beta*",
+        "refs/tags/v[0-9]+.[0-9]+.[0-9]+-devel*",
+        "refs/tags/v[0-9]+.[0-9]+.[0-9]+-test*",
+        "refs/tags/v20[0-9][0-9][0-1][0-9][0-3][0-9]-alpha*",
+        "refs/tags/v20[0-9][0-9][0-1][0-9][0-3][0-9]-beta*",
+        "refs/tags/v20[0-9][0-9][0-1][0-9][0-3][0-9]-devel*",
+        "refs/tags/v20[0-9][0-9][0-1][0-9][0-3][0-9]-test*"
+      ]
+    }
+  },
+  "rules": [
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "creation"
+    },
+    {
+      "type": "update"
+    },
+    {
+      "type": "required_signatures"
+    }
+  ],
+  "bypass_actors": [
+    {
+      "actor_id": null,
+      "actor_type": "OrganizationAdmin",
+      "bypass_mode": "always"
+    }
+  ]
+}

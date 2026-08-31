@@ -1,0 +1,66 @@
+# Visit https://docs.github.com/en/actions for more information about using
+# GitHub Actions and learn how-to build custom automated CI/CD workflows
+
+# Visit https://github.com/newrelic/deployment-marker-action to learn how-to
+# use and create New Relic Deployment Markers with the latest GitHub Aaction
+
+name: "New Relic Deployment Marker"
+run-name: "New Relic Deployment Marker for release ${{ github.ref_name }} by @${{ github.actor }}"
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v20[0-9][0-9][0-1][0-9][0-3][0-9]'
+      - 'main/v[0-9]+.[0-9]+.[0-9]+**'
+      - 'main/v20[0-9][0-9][0-1][0-9][0-3][0-9]**'
+      - 'pro/v[0-9]+.[0-9]+.[0-9]+**'
+      - 'pro/v20[0-9][0-9][0-1][0-9][0-3][0-9]**'
+      - 'release/v[0-9]+.[0-9]+.[0-9]+**'
+      - 'release/v20[0-9][0-9][0-1][0-9][0-3][0-9]**'
+      - 'stable/v[0-9]+.[0-9]+.[0-9]+**'
+      - 'stable/v20[0-9][0-9][0-1][0-9][0-3][0-9]**'
+      - 'v[0-9]+.[0-9]+.[0-9]+-main*'
+      - 'v[0-9]+.[0-9]+.[0-9]+-pro*'
+      - 'v[0-9]+.[0-9]+.[0-9]+-release*'
+      - 'v[0-9]+.[0-9]+.[0-9]+-stable*'
+      - 'v20[0-9][0-9][0-1][0-9][0-3][0-9]-main*'
+      - 'v20[0-9][0-9][0-1][0-9][0-3][0-9]-pro*'
+      - 'v20[0-9][0-9][0-1][0-9][0-3][0-9]-release*'
+      - 'v20[0-9][0-9][0-1][0-9][0-3][0-9]-stable*'
+
+permissions:
+  contents: write  # Required to use GitHub Workflow actions
+  id-token: write  # Required to request an OpenID Connect token
+
+env:
+  GITHUB_TOKEN: "${{ secrets.github_token }}"
+  RUNNER_ARCH: "amd64, arm64, armhf, ppc64le, riscv64, s390x"
+  RUNNER_OS: "macOS-latest, ubuntu-latest, windows-latest"
+
+jobs:
+  create:
+    name: "New Relic Deployment Marker"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "Checkout"
+        id: checkout
+        uses: actions/checkout@v5
+
+      - name: "Setup environment"
+        id: setup-environment
+        run: |
+          echo "OWNER_NAME=$(tr '[:upper:]' '[:lower:]' <<< $GITHUB_REPOSITORY | cut -d'/' -f1 | tr '_' '-')" >> "$GITHUB_ENV"
+          echo "REPO_NAME=$(tr '[:upper:]' '[:lower:]' <<< $GITHUB_REPOSITORY | cut -d'/' -f2 | tr '_' '-')" >> "$GITHUB_ENV"
+
+      - name: "New Relic release"
+        id: deployment-marker
+        uses: newrelic/deployment-marker-action@v2.5.0
+        with:
+          guid: "${{ secrets.NEW_RELIC_RELEASE_ENTITY_GUID }}"
+          apiKey: "${{ secrets.NEW_RELIC_API_KEY }}"
+          commit: "${{ github.sha }}"
+          description: "Release ${{ github.ref_name }} published to ${{ github.repository }} by @${{ github.actor }} via GitHub Actions"
+          deploymenttype: OTHER
+          version: "${{ github.ref_name }}"
+          user: "${{ github.actor }}"

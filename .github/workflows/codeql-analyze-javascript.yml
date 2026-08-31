@@ -1,0 +1,98 @@
+# Visit https://github.com/github/codeql-action to learn how-to use
+# and analysis source code to find security vulnerabilities.
+
+name: "CodeQL Analysis JavaScript"
+run-name: "CodeQL analysis javascript changes by @${{ github.actor }}"
+on:
+  workflow_dispatch:
+  push:
+    branches: ['**']
+    paths:
+      - '!.github/workflows/**.yaml'
+      - '!.github/workflows/**.yml'
+      - '**.ejs'
+      - '**.es'
+      - '**.es6'
+      - '**.hbs'
+      - '**.htm'
+      - '**.html'
+      - '**.js'
+      - '**.json'
+      - '**.jsx'
+      - '**.mjs'
+      - '**.njk'
+      - '**.raml'
+      - '**.vue'
+      - '**.xhtm'
+      - '**.xhtml'
+      - '**.xml'
+      - '**.yaml'
+      - '**.yml'
+  pull_request:
+    branches: ['**']
+    paths:
+      - '!.github/workflows/**.yaml'
+      - '!.github/workflows/**.yml'
+      - '**.ejs'
+      - '**.es'
+      - '**.es6'
+      - '**.hbs'
+      - '**.htm'
+      - '**.html'
+      - '**.js'
+      - '**.json'
+      - '**.jsx'
+      - '**.mjs'
+      - '**.njk'
+      - '**.raml'
+      - '**.vue'
+      - '**.xhtm'
+      - '**.xhtml'
+      - '**.xml'
+      - '**.yaml'
+      - '**.yml'
+    # schedule:
+  #   # Use the following to schedule this workflow
+  #   # <minute> <hour> <day> <month> <day_of_week>
+  #   - cron: '0 8 * * 3'
+
+permissions:
+  contents: write  # Required to use GitHub Workflow actions
+  id-token: write  # Required to request an OpenID Connect token
+
+env:
+  GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+
+jobs:
+  analyze:
+    name: "CodeQL Analysis JavaScript"
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['javascript']
+
+    steps:
+      - name: "Checkout"
+        id: checkout
+        uses: actions/checkout@v5
+
+      - name: "Confirm pull-request"
+        id: confirm-pull-request
+        run: git checkout HEAD^2
+        if: ${{ github.event_name }} == 'pull_request'
+
+      - name: "Initialize CodeQL"
+        id: initialize-codeql
+        uses: github/codeql-action/init@v3
+        with:
+          languages: "${{ matrix.language }}"
+
+      - name: "Build project"
+        id: build-project
+        uses: github/codeql-action/autobuild@v3
+
+      - name: "Perform analysis"
+        id: perform-analysis
+        uses: github/codeql-action/analyze@v3

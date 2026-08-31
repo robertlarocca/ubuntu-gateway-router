@@ -1,0 +1,126 @@
+{
+  "name": "default-branch",
+  "target": "branch",
+  "source_type": "Organization",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "exclude": [],
+      "include": [
+        "~DEFAULT_BRANCH",
+        "refs/heads/main",
+        "refs/heads/master"
+      ]
+    }
+  },
+  "rules": [
+    {
+      "type": "file_path_restriction",
+      "parameters": {
+        "restricted_file_paths": [
+          "**/.ansible_vault/*",
+          "**/.cifs/*",
+          "**/.gnupg/*",
+          "**/.htpasswd*",
+          "**/.ldap/*",
+          "**/.mariadb/*.cnf",
+          "**/.mariadb/*.pem",
+          "**/.mysql/*.cnf",
+          "**/.mysql/*.pem",
+          "**/.opensearch/*",
+          "**/.passwd*",
+          "**/.rabbitmq/*",
+          "**/.redis/*",
+          "**/.sshpass/*",
+          "**/.valkey/*",
+          "**/*.asc",
+          "**/auth.json",
+          "**/gpg-key.txt",
+          "**/pgp-key.txt",
+          "**/id_dsa",
+          "**/id_ecdsa_sk",
+          "**/id_ecdsa-sk",
+          "**/id_ecdsa",
+          "**/id_ed25519_sk",
+          "**/id_ed25519-sk",
+          "**/id_ed25519",
+          "**/id_rsa"
+        ]
+      }
+    },
+    {
+      "type": "file_extension_restriction",
+      "parameters": {
+        "restricted_file_extensions": [
+          "*.apk",
+          "*.app",
+          "*.bat",
+          "*.bin",
+          "*.cab",
+          "*.cmd",
+          "*.com",
+          "*.command",
+          "*.dll",
+          "*.exe",
+          "*.img",
+          "*.iso",
+          "*.jar",
+          "*.jse",
+          "*.lnk",
+          "*.msi",
+          "*.msix",
+          "*.msp",
+          "*.pkg",
+          "*.reg",
+          "*.rgs",
+          "*.vbe"
+        ]
+      }
+    },
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 1,
+        "dismiss_stale_reviews_on_push": true,
+        "require_code_owner_review": false,
+        "require_last_push_approval": true,
+        "required_review_thread_resolution": false,
+        "automatic_copilot_code_review_enabled": false,
+        "allowed_merge_methods": [
+          "merge",
+          "squash",
+          "rebase"
+        ]
+      }
+    },
+    {
+      "type": "copilot_code_review",
+      "parameters": {
+        "review_on_push": false,
+        "review_draft_pull_requests": false
+      }
+    },
+    {
+      "type": "creation"
+    },
+    {
+      "type": "update"
+    },
+    {
+      "type": "required_signatures"
+    }
+  ],
+  "bypass_actors": [
+    {
+      "actor_id": null,
+      "actor_type": "OrganizationAdmin",
+      "bypass_mode": "always"
+    }
+  ]
+}

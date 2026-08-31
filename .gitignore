@@ -1,0 +1,132 @@
+# You should customize this list as applicable to this project.
+#
+# Learn more about .gitignore files at the following URLs:
+# - https://git-scm.com/docs/gitignore
+# - https://github.com/github/gitignore
+
+# Ansible
+*.retry
+
+# Backup
+*-bak*
+*-gho*
+*-orig*
+*-tmp*
+*.bak*
+*.gho*
+*.orig*
+*.tmp*
+
+# SVN
+**/.svn/
+
+# Keep sensitive files and secrets Encrypted if you must store it online!
+#
+# Ansible Vault and GitHub can both encrypt sensitive data to help keep your
+# information private. Checkout the following links for more information:
+#
+# - https://docs.ansible.com/ansible/latest/vault_guide/index.html
+# - https://docs.github.com/en/actions/security-guides/encrypted-secrets
+
+# GPG
+pubring.*
+secring.*
+
+# Passwords (plain-text and hashed)
+*.htpasswd
+*.passwd
+**/.elasticsearch/*
+**/.htpasswd
+**/.ldap/*
+**/.mariadb/*.cnf
+**/.mysql/*.cnf
+**/.opensearch/*
+**/.passwd
+**/.rabbitmq/*
+**/.redis/*
+**/.sshpass/*
+**/.valkey/*
+
+# SSH (private keys)
+**/id_dsa
+**/id_ecdsa
+**/id_ecdsa_sk
+**/id_ecdsa-sk
+**/id_ed25519
+**/id_ed25519_sk
+**/id_ed25519-sk
+**/id_rsa
+
+# Logs
+*.log
+*.log-*
+*.log.*
+
+# JetBrains IDEs
+.idea_modules/
+.idea/
+*.iws
+out/
+
+# Composer Authentication
+**/auth.json*
+
+# Github Tokens
+**/.artifact_github_token*
+**/.artifact_github.token*
+**/.github_token*
+**/.github.token*
+
+# Sublime Text
+*.stTheme.cache
+*.sublime-workspace
+*.tmlanguage.cache
+*.tmPreferences.cache
+GitHub.sublime-settings
+
+# Visual Studio Code
+.history/
+.vscode/
+*.vsix
+
+# Xcode
+*.xccheckout
+*.xcscmblueprint
+xcuserdata/
+
+# macOS
+._*
+.apdisk
+.AppleDB
+.AppleDesktop
+.AppleDouble
+.com.apple.timemachine.donotpresent
+.DocumentRevisions-V100
+.DS_Store
+.fseventsd
+.LSOverride
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+Icon\r\r
+Network Trash Folder
+Temporary Items
+
+# Windows
+[Dd]esktop.ini
+*.cab
+*.lnk
+*.msi
+*.msix
+*.msm
+*.msp
+*.stackdump
+$RECYCLE.BIN/
+ehthumbs_vista.db
+ehthumbs.db
+Thumbs.db
+Thumbs.db:encryptable
+
+# Windows Subsystem for Linux (WSL)
+*:Zone.Identifier
