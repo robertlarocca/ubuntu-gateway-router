@@ -1,0 +1,139 @@
+// Managed by setup-gateway-router.sh - do not edit by hand.
+// Validate with:  named-checkconf -z
+
+// ---------------------------------------------------------------------------
+// Access control lists. Defining these once keeps the options block readable
+// and means adding a VLAN is a one-line change.
+// ---------------------------------------------------------------------------
+acl "internal" {
+        127.0.0.1; ::1;
+        10.11.1.0/24;                    // VLAN 1 default
+        10.11.2.0/24;                    // VLAN 2 wifi
+        10.11.3.0/24;                    // VLAN 3 iot
+        10.11.4.0/24;                    // VLAN 4 dmz
+        10.11.5.0/24;                    // VLAN 5 guest
+        10.11.99.0/24;                    // VLAN 99 mgmt
+        2001:db8:1000::/48;
+        fd09:10:11::/48;
+};
+
+acl "mgmt" {
+        127.0.0.1; ::1;
+        10.11.99.0/24;   // management VLAN 99
+};
+
+options {
+        directory "/var/cache/bind";
+
+        // -------------------------------------------------------------------
+        // Sockets. named is bound to explicit addresses so it can never
+        // answer on the WAN interface, even if a rule is later removed from
+        // the firewall. Defence in depth: an open resolver is abused within
+        // hours of appearing on the Internet.
+        // -------------------------------------------------------------------
+        listen-on port 53 { 127.0.0.1; 10.11.1.1; 10.11.2.1; 10.11.3.1; 10.11.4.1; 10.11.5.1; 10.11.99.1; };
+        listen-on-v6 port 53 { ::1; 2001:db8:1000:1::1; fd09:10:11:1::1; 2001:db8:1000:2::1; fd09:10:11:2::1; 2001:db8:1000:3::1; fd09:10:11:3::1; 2001:db8:1000:4::1; fd09:10:11:4::1; 2001:db8:1000:5::1; fd09:10:11:5::1; 2001:db8:1000:99::1; fd09:10:11:99::1; };
+
+        // -------------------------------------------------------------------
+        // Who may ask what.
+        // -------------------------------------------------------------------
+        allow-query       { internal; };
+        allow-query-cache { internal; };
+        allow-recursion   { internal; };
+        recursion yes;
+        // Zone transfers and updates are granted per-zone, never globally.
+        allow-transfer    { none; };
+        allow-update      { none; };
+        allow-notify      { none; };
+
+        // -------------------------------------------------------------------
+        // Resolution behaviour.
+        // -------------------------------------------------------------------
+        // Full recursion from the root servers by default. If you must use
+        // the ISP's or a public resolver instead, uncomment below - but note
+        // that you then trust them for every answer.
+        // forwarders { 9.9.9.9; 2620:fe::fe; };
+        // forward only;
+
+        // Validate DNSSEC using the root trust anchor shipped and maintained
+        // by the bind9 package (RFC 5011 rollover included).
+        dnssec-validation auto;
+
+        // Send only the minimum necessary query name to each authoritative
+        // server. "strict" refuses to fall back to sending the full name.
+        qname-minimization strict;
+
+        // Omit authority/additional sections clients rarely use - smaller
+        // responses, less amplification potential.
+        minimal-responses yes;
+
+        // Refresh popular records shortly before they expire so clients
+        // rarely wait on an upstream lookup.
+        prefetch 2 9;
+
+        max-cache-size 25%;
+        max-cache-ttl 86400;
+        max-ncache-ttl 3600;
+
+        // Response rate limiting: caps the damage if the resolver is ever
+        // exposed or used as a reflector by an internal host.
+        rate-limit {
+                responses-per-second 20;
+                referrals-per-second 5;
+                nodata-per-second 5;
+                nxdomains-per-second 5;
+                errors-per-second 5;
+                window 5;
+                // Do not throttle our own clients.
+                exempt-clients { internal; };
+        };
+
+        // Do not advertise the software version to probes.
+        version none;
+        hostname none;
+        server-id none;
+
+        // We are authoritative for these zones and answer NXDOMAIN properly.
+        auth-nxdomain no;
+
+        // Ignore upstream notify traffic; nothing is a secondary of ours.
+        notify no;
+
+        // EDNS buffer sized to avoid IP fragmentation, which firewalls and
+        // middleboxes handle badly (see DNS flag day 2020).
+        edns-udp-size 1232;
+        max-udp-size 1232;
+};
+
+// ---------------------------------------------------------------------------
+// Logging. The default is almost nothing; these channels make DNS problems
+// diagnosable without turning on full query logging permanently.
+// ---------------------------------------------------------------------------
+logging {
+        channel default_log {
+                file "/var/log/named/named.log" versions 5 size 20m;
+                severity info;
+                print-time yes;
+                print-severity yes;
+                print-category yes;
+        };
+        channel update_log {
+                file "/var/log/named/update.log" versions 3 size 10m;
+                severity info;
+                print-time yes;
+        };
+        channel security_log {
+                file "/var/log/named/security.log" versions 3 size 10m;
+                severity info;
+                print-time yes;
+        };
+        category default          { default_log; };
+        category dnssec           { default_log; };
+        category resolver         { default_log; };
+        category lame-servers     { null; };   // noisy and rarely actionable
+        category update           { update_log; };
+        category update-security  { update_log; };
+        category security         { security_log; };
+        // Uncomment temporarily to log every query - very high volume.
+        // category queries       { default_log; };
+};

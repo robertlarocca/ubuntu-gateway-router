@@ -1,0 +1,12 @@
+$TTL 3600
+$ORIGIN 1.11.10.in-addr.arpa.
+;
+; VLAN 1 (default) reverse zone - dynamic, see note in db.internal.
+;
+@       IN SOA  ns1.internal. hostmaster.internal. (
+                2026083101 3600 600 1209600 3600 )
+
+        IN NS   ns1.internal.
+
+; The gateway's own PTR, written with an absolute owner name.
+1.1.11.10.in-addr.arpa.  IN PTR  gw-default.internal.

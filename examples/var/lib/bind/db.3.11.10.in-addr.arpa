@@ -1,0 +1,12 @@
+$TTL 3600
+$ORIGIN 3.11.10.in-addr.arpa.
+;
+; VLAN 3 (iot) reverse zone - dynamic, see note in db.internal.
+;
+@       IN SOA  ns1.internal. hostmaster.internal. (
+                2026083101 3600 600 1209600 3600 )
+
+        IN NS   ns1.internal.
+
+; The gateway's own PTR, written with an absolute owner name.
+1.3.11.10.in-addr.arpa.  IN PTR  gw-iot.internal.

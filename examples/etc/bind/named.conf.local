@@ -1,0 +1,101 @@
+// Managed by setup-gateway-router.sh - do not edit by hand.
+
+// The TSIG key kea-dhcp-ddns uses to authenticate its DNS UPDATEs.
+include "/etc/bind/keys/ddns-key.key";
+
+// ---------------------------------------------------------------------------
+// Forward zone.
+//
+// 'update-policy' is preferred over 'allow-update': it authorises by key
+// rather than by source address, and 'zonesub' scopes the grant to names at
+// or below the zone apex, so a compromised DHCP server cannot rewrite the
+// SOA or NS records.
+// ---------------------------------------------------------------------------
+zone "internal" {
+        type primary;
+        file "/var/lib/bind/db.internal";
+        update-policy {
+                grant ddns-key zonesub ANY;
+        };
+        // Keep the journal small; changes are folded back into the zone file.
+        // 'nsupdate -l' or rndc sync -clean will flush it manually.
+        allow-transfer { none; };
+        notify no;
+};
+
+// --- IPv4 reverse zones ---------------------------------------------------
+zone "1.11.10.in-addr.arpa" {
+        // VLAN 1 (default)
+        type primary;
+        file "/var/lib/bind/db.1.11.10.in-addr.arpa";
+        update-policy { grant ddns-key zonesub ANY; };
+        allow-transfer { none; };
+        notify no;
+};
+zone "2.11.10.in-addr.arpa" {
+        // VLAN 2 (wifi)
+        type primary;
+        file "/var/lib/bind/db.2.11.10.in-addr.arpa";
+        update-policy { grant ddns-key zonesub ANY; };
+        allow-transfer { none; };
+        notify no;
+};
+zone "3.11.10.in-addr.arpa" {
+        // VLAN 3 (iot)
+        type primary;
+        file "/var/lib/bind/db.3.11.10.in-addr.arpa";
+        update-policy { grant ddns-key zonesub ANY; };
+        allow-transfer { none; };
+        notify no;
+};
+zone "4.11.10.in-addr.arpa" {
+        // VLAN 4 (dmz)
+        type primary;
+        file "/var/lib/bind/db.4.11.10.in-addr.arpa";
+        update-policy { grant ddns-key zonesub ANY; };
+        allow-transfer { none; };
+        notify no;
+};
+zone "5.11.10.in-addr.arpa" {
+        // VLAN 5 (guest)
+        type primary;
+        file "/var/lib/bind/db.5.11.10.in-addr.arpa";
+        update-policy { grant ddns-key zonesub ANY; };
+        allow-transfer { none; };
+        notify no;
+};
+zone "99.11.10.in-addr.arpa" {
+        // VLAN 99 (mgmt)
+        type primary;
+        file "/var/lib/bind/db.99.11.10.in-addr.arpa";
+        update-policy { grant ddns-key zonesub ANY; };
+        allow-transfer { none; };
+        notify no;
+};
+
+// --- IPv6 reverse zones ---------------------------------------------------
+// One zone per site prefix covers every VLAN /64 beneath it.
+zone "0.0.0.1.8.b.d.0.1.0.0.2.ip6.arpa" {
+        // 2001:db8:1000::/48
+        type primary;
+        file "/var/lib/bind/db.0.0.0.1.8.b.d.0.1.0.0.2.ip6.arpa";
+        update-policy { grant ddns-key zonesub ANY; };
+        allow-transfer { none; };
+        notify no;
+};
+zone "1.1.0.0.0.1.0.0.9.0.d.f.ip6.arpa" {
+        // fd09:10:11::/48
+        type primary;
+        file "/var/lib/bind/db.1.1.0.0.0.1.0.0.9.0.d.f.ip6.arpa";
+        update-policy { grant ddns-key zonesub ANY; };
+        allow-transfer { none; };
+        notify no;
+};
+
+// ---------------------------------------------------------------------------
+// Note on leakage: BIND already serves the RFC 6303 / RFC 8375 empty zones
+// automatically (10.in-addr.arpa, d.f.ip6.arpa, home.arpa and friends), so
+// reverse lookups for private space we do not own are answered locally
+// instead of being sent to the root servers. Our own /48 zone above is more
+// specific than d.f.ip6.arpa, so it still wins. Do not redeclare the empty
+// zones here - use "empty-zones-enable no" only if you have a reason to.

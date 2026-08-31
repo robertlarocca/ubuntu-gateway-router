@@ -1,0 +1,44 @@
+$TTL 3600
+$ORIGIN internal.
+;
+; Managed by setup-gateway-router.sh. THIS FILE IS DYNAMIC: named rewrites
+; it from the journal. Edit it only via 'nsupdate', or stop named, edit, and
+; delete the matching .jnl file before starting again.
+;
+@       IN SOA  ns1.internal. hostmaster.internal. (
+                2026083101   ; serial (dynamic updates bump this)
+                3600             ; refresh
+                600              ; retry
+                1209600          ; expire  (14 days)
+                3600 )           ; minimum
+
+        IN NS   ns1.internal.
+
+; --- The router itself ----------------------------------------------------
+; ns1 points at the loopback address, which stays up even if a physical
+; interface goes down.
+ns1                      IN A     10.255.255.1
+ns1                      IN AAAA  fd09:10:255:255::1
+gateway1                 IN A     10.255.255.1
+gateway1                 IN AAAA  fd09:10:255:255::1
+
+; --- Per-VLAN gateway addresses -------------------------------------------
+; Handy for monitoring and for pinning a test to one specific interface.
+gw-default               IN A     10.11.1.1
+gw-default               IN AAAA  2001:db8:1000:1::1
+gw-default-ula           IN AAAA  fd09:10:11:1::1
+gw-wifi                  IN A     10.11.2.1
+gw-wifi                  IN AAAA  2001:db8:1000:2::1
+gw-wifi-ula              IN AAAA  fd09:10:11:2::1
+gw-iot                   IN A     10.11.3.1
+gw-iot                   IN AAAA  2001:db8:1000:3::1
+gw-iot-ula               IN AAAA  fd09:10:11:3::1
+gw-dmz                   IN A     10.11.4.1
+gw-dmz                   IN AAAA  2001:db8:1000:4::1
+gw-dmz-ula               IN AAAA  fd09:10:11:4::1
+gw-guest                 IN A     10.11.5.1
+gw-guest                 IN AAAA  2001:db8:1000:5::1
+gw-guest-ula             IN AAAA  fd09:10:11:5::1
+gw-mgmt                  IN A     10.11.99.1
+gw-mgmt                  IN AAAA  2001:db8:1000:99::1
+gw-mgmt-ula              IN AAAA  fd09:10:11:99::1

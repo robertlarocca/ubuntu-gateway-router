@@ -1,0 +1,151 @@
+# Managed by setup-gateway-router.sh - do not edit by hand.
+# Apply with:  netplan try   (auto-reverts after 120s if you lose the link)
+network:
+  version: 2
+  # systemd-networkd, not NetworkManager: this is a headless router.
+  renderer: networkd
+
+  ethernets:
+    # ---------------------------------------------------------------------
+    # WAN uplink. IPv4 by DHCP, IPv6 by router advertisement from the ISP.
+    # ---------------------------------------------------------------------
+    enp1s0:
+      dhcp4: true
+      dhcp4-overrides:
+        # We run our own validating resolver, so ignore the ISP's servers
+        # and search domain rather than letting them into resolv.conf.
+        use-dns: false
+        use-domains: false
+        use-ntp: false
+        # Do accept the default route - that is the point of the uplink.
+        use-routes: true
+        # Slightly lower metric than the LAN so it wins as the default path.
+        route-metric: 100
+      # Stateful DHCPv6 is only needed if the ISP's RA sets the M flag;
+      # accept-ra covers the common SLAAC + default-route case. If your ISP
+      # requires DHCPv6 (or you enable PD below), set dhcp6: true.
+      dhcp6: false
+      accept-ra: true
+      # Stable addressing on a router; privacy extensions would churn the
+      # source address used for its own outbound traffic.
+      ipv6-privacy: false
+      link-local: [ipv6]
+      # 'optional' stops boot from blocking for 2 minutes if the ISP link
+      # happens to be down.
+      optional: true
+
+    # ---------------------------------------------------------------------
+    # LAN trunk. No addresses of its own - it only carries tagged frames.
+    # ---------------------------------------------------------------------
+    enp2s0:
+      dhcp4: false
+      dhcp6: false
+      accept-ra: false
+      link-local: []
+      optional: true
+      # Raise the MTU here (and on the switch) if you want 802.1Q frames to
+      # carry a full 1500-byte payload: mtu: 1504
+
+  # -----------------------------------------------------------------------
+  # Dummy interface holding the router's stable identity. Unlike a physical
+  # address, this never goes down, which is exactly what OSPF wants for its
+  # router-id and what monitoring wants as a target.
+  # -----------------------------------------------------------------------
+  dummy-devices:
+    dum0:
+      addresses:
+        - 10.255.255.1/32
+        - fd09:10:255:255::1/128
+      accept-ra: false
+      link-local: []
+
+  # -----------------------------------------------------------------------
+  # Per-VLAN downstream interfaces. Each is a routed L3 gateway: static v4,
+  # static IPv6 GUA and ULA. No 'gateway4/6' keys - a router's default route
+  # comes from the WAN side only.
+  # -----------------------------------------------------------------------
+  vlans:
+    vln1:
+      # VLAN 1 - default (trusted zone)
+      id: 1
+      link: enp2s0
+      dhcp4: false
+      dhcp6: false
+      accept-ra: false
+      # Link-local IPv6 is required: OSPFv3 peers over fe80:: and our own
+      # router advertisements are sourced from it.
+      link-local: [ipv6]
+      addresses:
+        - 10.11.1.1/24
+        - 2001:db8:1000:1::1/64
+        - fd09:10:11:1::1/64
+    vln2:
+      # VLAN 2 - wifi (trusted zone)
+      id: 2
+      link: enp2s0
+      dhcp4: false
+      dhcp6: false
+      accept-ra: false
+      # Link-local IPv6 is required: OSPFv3 peers over fe80:: and our own
+      # router advertisements are sourced from it.
+      link-local: [ipv6]
+      addresses:
+        - 10.11.2.1/24
+        - 2001:db8:1000:2::1/64
+        - fd09:10:11:2::1/64
+    vln3:
+      # VLAN 3 - iot (restricted zone)
+      id: 3
+      link: enp2s0
+      dhcp4: false
+      dhcp6: false
+      accept-ra: false
+      # Link-local IPv6 is required: OSPFv3 peers over fe80:: and our own
+      # router advertisements are sourced from it.
+      link-local: [ipv6]
+      addresses:
+        - 10.11.3.1/24
+        - 2001:db8:1000:3::1/64
+        - fd09:10:11:3::1/64
+    vln4:
+      # VLAN 4 - dmz (dmz zone)
+      id: 4
+      link: enp2s0
+      dhcp4: false
+      dhcp6: false
+      accept-ra: false
+      # Link-local IPv6 is required: OSPFv3 peers over fe80:: and our own
+      # router advertisements are sourced from it.
+      link-local: [ipv6]
+      addresses:
+        - 10.11.4.1/24
+        - 2001:db8:1000:4::1/64
+        - fd09:10:11:4::1/64
+    vln5:
+      # VLAN 5 - guest (dmz zone)
+      id: 5
+      link: enp2s0
+      dhcp4: false
+      dhcp6: false
+      accept-ra: false
+      # Link-local IPv6 is required: OSPFv3 peers over fe80:: and our own
+      # router advertisements are sourced from it.
+      link-local: [ipv6]
+      addresses:
+        - 10.11.5.1/24
+        - 2001:db8:1000:5::1/64
+        - fd09:10:11:5::1/64
+    vln99:
+      # VLAN 99 - mgmt (mgmt zone)
+      id: 99
+      link: enp2s0
+      dhcp4: false
+      dhcp6: false
+      accept-ra: false
+      # Link-local IPv6 is required: OSPFv3 peers over fe80:: and our own
+      # router advertisements are sourced from it.
+      link-local: [ipv6]
+      addresses:
+        - 10.11.99.1/24
+        - 2001:db8:1000:99::1/64
+        - fd09:10:11:99::1/64

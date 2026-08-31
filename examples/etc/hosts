@@ -1,0 +1,10 @@
+# Managed by setup-gateway-router.sh
+127.0.0.1       localhost
+::1             localhost ip6-localhost ip6-loopback
+ff02::1         ip6-allnodes
+ff02::2         ip6-allrouters
+
+# The router's own stable addresses. Present here as well as in DNS so that
+# name resolution still works if named is down.
+10.255.255.1   gateway1.internal gateway1
+fd09:10:255:255::1   gateway1.internal gateway1

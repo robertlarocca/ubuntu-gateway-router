@@ -1,0 +1,39 @@
+# Managed by setup-gateway-router.sh - do not edit by hand.
+# Only enable what is actually used: every daemon is another listening
+# process and another config surface.
+
+zebra=yes            # kernel routing table interface, plus IPv6 RA
+mgmtd=yes            # configuration manager (required on FRR 9+)
+staticd=yes          # static routes configured in frr.conf
+ospfd=yes            # OSPFv2 (IPv4)
+ospf6d=yes           # OSPFv3 (IPv6)
+bgpd=no
+ripd=no
+ripngd=no
+isisd=no
+pimd=no
+pim6d=no
+ldpd=no
+nhrpd=no
+eigrpd=no
+babeld=no
+sharpd=no
+pbrd=no
+bfdd=no              # set to yes for sub-second failure detection
+fabricd=no
+vrrpd=no
+pathd=no
+
+# -A 127.0.0.1 binds each daemon's vty to the loopback only.
+zebra_options="  -A 127.0.0.1 -s 90000000"
+mgmtd_options="  -A 127.0.0.1"
+staticd_options="-A 127.0.0.1"
+ospfd_options="  -A 127.0.0.1"
+ospf6d_options=" -A 127.0.0.1"
+bgpd_options="   -A 127.0.0.1"
+bfdd_options="   -A 127.0.0.1"
+
+vtysh_enable=yes
+# Watchfrr restarts any daemon that dies.
+watchfrr_enable=yes
+watchfrr_options=""
