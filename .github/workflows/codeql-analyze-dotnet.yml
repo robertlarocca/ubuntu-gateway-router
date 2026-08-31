@@ -47,7 +47,7 @@ jobs:
     steps:
       - name: "Checkout"
         id: checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: "Confirm pull-request"
         id: confirm-pull-request
@@ -69,14 +69,14 @@ jobs:
 
       - name: "Initialize CodeQL"
         id: initialize-codeql
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: "${{ matrix.language }}"
 
       - name: "Build project"
         id: build-project
-        uses: github/codeql-action/autobuild@v3
+        uses: github/codeql-action/autobuild@v4
 
       - name: "Perform analysis"
         id: perform-analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
