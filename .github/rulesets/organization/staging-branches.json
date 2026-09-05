@@ -37,69 +37,6 @@
   },
   "rules": [
     {
-      "type": "file_path_restriction",
-      "parameters": {
-        "restricted_file_paths": [
-          "**/.ansible_vault/*",
-          "**/.cifs/*",
-          "**/.gnupg/*",
-          "**/.htpasswd*",
-          "**/.ldap/*",
-          "**/.mariadb/*.cnf",
-          "**/.mariadb/*.pem",
-          "**/.mysql/*.cnf",
-          "**/.mysql/*.pem",
-          "**/.opensearch/*",
-          "**/.passwd*",
-          "**/.rabbitmq/*",
-          "**/.redis/*",
-          "**/.sshpass/*",
-          "**/.valkey/*",
-          "**/*.asc",
-          "**/auth.json",
-          "**/gpg-key.txt",
-          "**/pgp-key.txt",
-          "**/id_dsa",
-          "**/id_ecdsa_sk",
-          "**/id_ecdsa-sk",
-          "**/id_ecdsa",
-          "**/id_ed25519_sk",
-          "**/id_ed25519-sk",
-          "**/id_ed25519",
-          "**/id_rsa"
-        ]
-      }
-    },
-    {
-      "type": "file_extension_restriction",
-      "parameters": {
-        "restricted_file_extensions": [
-          "*.apk",
-          "*.app",
-          "*.bat",
-          "*.bin",
-          "*.cab",
-          "*.cmd",
-          "*.com",
-          "*.command",
-          "*.dll",
-          "*.exe",
-          "*.img",
-          "*.iso",
-          "*.jar",
-          "*.jse",
-          "*.lnk",
-          "*.msi",
-          "*.msix",
-          "*.msp",
-          "*.pkg",
-          "*.reg",
-          "*.rgs",
-          "*.vbe"
-        ]
-      }
-    },
-    {
       "type": "deletion"
     },
     {
@@ -110,10 +47,11 @@
       "parameters": {
         "required_approving_review_count": 1,
         "dismiss_stale_reviews_on_push": true,
+        "required_reviewers": [],
         "require_code_owner_review": false,
         "require_last_push_approval": true,
         "required_review_thread_resolution": false,
-        "automatic_copilot_code_review_enabled": false,
+        "require_extra_approval_for_unattributed_changes": true,
         "allowed_merge_methods": [
           "merge",
           "squash",
@@ -124,8 +62,8 @@
     {
       "type": "copilot_code_review",
       "parameters": {
-        "review_on_push": false,
-        "review_draft_pull_requests": false
+        "review_on_push": true,
+        "review_draft_pull_requests": true
       }
     },
     {
@@ -140,8 +78,8 @@
   ],
   "bypass_actors": [
     {
-      "actor_id": null,
-      "actor_type": "OrganizationAdmin",
+      "actor_id": 29333852,
+      "actor_type": "User",
       "bypass_mode": "always"
     }
   ]
