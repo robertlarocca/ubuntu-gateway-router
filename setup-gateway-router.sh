@@ -36,7 +36,7 @@
 #  sudo ./setup-gateway-router.sh --yes        # non-interactive, render, validate, setup
 #
 # IMPORTANT: applying netplan/nftables over SSH can lock you out. Run from a
-# console, or from the mgmt VLAN, or keep a `sleep 600; netplan revert`
+# console, or from the admin VLAN, or keep a `sleep 600; netplan revert`
 # safety net running in another session.
 #
 
@@ -53,36 +53,36 @@ umask 022
 # Set hostname and internal DNS zone name.
 ROUTER_HOSTNAME="gateway1"
 # Use a registered or reserved domain. Do not invent a TLD like private or lan
-DOMAIN="internal"
+DOMAIN="larocca.io"
 
 ## Physical interfaces
 # Find real network interface names with command: ip -br link
 # Set WAN interface (uplink to ISP gateway or modem)
-WAN_IF="enp1s0"
+WAN_IF="enp1s0f0"
 # Set LAN interface for 802.1Q trunk (uplink to access switch)
-LAN_TRUNK_IF="enp2s0"
-# Set VLAN or virtual local area network prefix (eg. vln1, vln10, vln20, etc)
+LAN_TRUNK_IF="enp1s0f2"
+# Set VLAN or virtual local area network prefix (eg. vlan1, vlan10, vlan20, etc)
 # Note: The (prefix + number) is limited to 15 total characters
-VLAN_IF_PREFIX="vln"
+VLAN_IF_PREFIX="vlan"
 
-## Loopback (stable router-id and management IPv4 address)
+## Loopback (stable router-id and administrator IPv4 address)
 # Set DUM (dummy) interface used so address will survive physical link failure
-LOOPBACK_IF="dum0"
+LOOPBACK_IF="lo"
 # Set loopback (dummy) IPv4 address using CIDR notation
-LOOPBACK_V4="10.255.255.1/32"
+LOOPBACK_V4="10.11.0.1/32"
 # Set OSPF ID  to above loopback (dummy) IPv4 address
-OSPF_ROUTER_ID="10.255.255.1"
+OSPF_ROUTER_ID="10.11.0.1"
 
 ## IPv6 address prefixes
 # Note: Replace 2001:db8::/32 it will not route (See: RFC 3849)
 # Set GUA prefix (/48 or /56) assigned by ISP or RIR delegate
-IPV6_GUA_PREFIX="2001:db8:1000::/48"
+# IPV6_GUA_PREFIX="2001:db8:1000::/48"
 # Generate random /48 prefox with command: openssl rand -hex 5  # or
 # echo "fd$(openssl rand -hex 1):$(openssl rand -hex 2):$(openssl rand -hex 2)"
 # Set ULA prefix for stable internal addresses that survive ISP changes
 IPV6_ULA_PREFIX="fd09:10:11::/48"
 # Set loopback (dummy) IPv6 address using CIDR notation (either GUA or ULA)
-LOOPBACK_V6="fd09:10:255:255::1/128"
+LOOPBACK_V6="fd09:10:11:0::1/128"
 
 # Set to "yes" if ISP or RIR delegates prefixs dynamically using DHCPv6-PD
 # instead of statically assigned. Netplan does not have native key for prefix
@@ -99,18 +99,18 @@ ENABLE_DHCPV6_PD="yes"
 #  - 3 router IPv4 address in CIDR form (the default gateway for that VLAN)
 #  - 4 DHCPv4 dynamic pool  (start-end)
 #  - 5 IPv6 subnet id, i.e. the 4th hextet appended to the /48 -> :<id>::/64
-#  - 6 zone class: trusted | restricted | dmz | mgmt  (drives firewall policy)
+#  - 6 zone class: trusted | restricted | dmz | admin  (drives firewall policy)
 VLAN_DEFS=(
   "1:default:10.11.1.1/24:10.11.1.100-10.11.1.199:0001:trusted"
   "2:wifi:10.11.2.1/24:10.11.2.100-10.11.2.199:0002:trusted"
   "3:iot:10.11.3.1/24:10.11.3.100-10.11.3.199:0003:restricted"
   "4:dmz:10.11.4.1/24:10.11.4.100-10.11.4.199:0004:dmz"
   "5:guest:10.11.5.1/24:10.11.5.100-10.11.5.199:0005:dmz"
-  "99:mgmt:10.11.99.1/24:10.11.99.100-10.11.99.199:0099:mgmt"
+  "99:admin:10.11.99.1/24:10.11.99.100-10.11.99.199:0099:admin"
 )
 
 # Set VLAN for managment (hosts may connect via SSH and talk OSPF to router).
-MGMT_VLAN_ID="99"
+ADMIN_VLAN_ID="99"
 
 ## DHCPv4 and DHCPv6 timers (seconds)
 DHCP4_VALID_LIFETIME="3600"
@@ -282,12 +282,12 @@ for _def in "${VLAN_DEFS[@]}"; do
 done
 # Space-separated form for nftables set literals, e.g. "vl10", "vl20"
 NFT_LAN_IF_SET=$(printf '"%s", ' "${VLAN_IFACES[@]}"); NFT_LAN_IF_SET="${NFT_LAN_IF_SET%, }"
-MGMT_IF="${VLAN_IF_PREFIX}${MGMT_VLAN_ID}"
-# The management VLAN's own IPv4 CIDR, pulled out once for the BIND ACL below.
-MGMT_V4_CIDR=""
+ADMIN_IF="${VLAN_IF_PREFIX}${ADMIN_VLAN_ID}"
+# The administrator VLAN's own IPv4 CIDR, pulled out once for the BIND ACL below.
+ADMIN_V4_CIDR=""
 for _def in "${VLAN_DEFS[@]}"; do
   IFS=':' read -r _id _name _v4 _pool _sid _class <<<"$_def"
-  [ "$_id" = "$MGMT_VLAN_ID" ] && MGMT_V4_CIDR="$_v4"
+  [ "$_id" = "$ADMIN_VLAN_ID" ] && ADMIN_V4_CIDR="$_v4"
 done
 
 # -----------------------------------------------------------------------------
@@ -334,7 +334,7 @@ preflight() {
   v6_arpa_zone "$IPV6_GUA_PREFIX" >/dev/null || die "bad IPV6_GUA_PREFIX"
   v6_arpa_zone "$IPV6_ULA_PREFIX" >/dev/null || die "bad IPV6_ULA_PREFIX"
 
-  local seen_ids=" " seen_mgmt="no"
+  local seen_ids=" " seen_admin="no"
   for def in "${VLAN_DEFS[@]}"; do
     IFS=':' read -r id name v4 pool sid class <<<"$def"
     [ -n "$id" ] && [ -n "$name" ] && [ -n "$v4" ] && [ -n "$pool" ] \
@@ -343,15 +343,15 @@ preflight() {
     case "$seen_ids" in *" $id "*) die "duplicate VLAN id $id" ;; esac
     seen_ids="${seen_ids}${id} "
     case "$class" in
-      trusted|restricted|dmz|mgmt) : ;;
+      trusted|restricted|dmz|admin) : ;;
       *) die "unknown zone class '$class' for VLAN $id" ;;
     esac
     v4_network "$v4" >/dev/null || die "bad IPv4 CIDR for VLAN $id"
     v6_subnet "$IPV6_GUA_PREFIX" "$sid" >/dev/null || die "bad v6 sid for VLAN $id"
-    [ "$id" = "$MGMT_VLAN_ID" ] && seen_mgmt="yes"
+    [ "$id" = "$ADMIN_VLAN_ID" ] && seen_admin="yes"
     ok "VLAN ${id} (${name}/${class}) validated"
   done
-  [ "$seen_mgmt" = "yes" ] || die "MGMT_VLAN_ID=$MGMT_VLAN_ID has no VLAN_DEFS entry"
+  [ "$seen_admin" = "yes" ] || die "ADMIN_VLAN_ID=$ADMIN_VLAN_ID has no VLAN_DEFS entry"
 
   if [ "$DRY_RUN" = "yes" ]; then
     rm -rf "$ROOT"
@@ -414,8 +414,8 @@ configure_sysctl() {
   prepare "$f"
 
   {
-    cat <<EOF
-# Managed by setup-gateway-router.sh - do not edit by hand.
+    cat <<EOF_XYZ_XYZ
+# Managed by setup-gateway-router.sh
 
 #--- Forwarding --------------------------------------------------------------
 # The single switch that turns a host into a router, per address family.
@@ -472,20 +472,20 @@ net.ipv6.neigh.default.gc_thresh3 = 8192
 # FRR needs to send to link-local multicast groups on internal links.
 net.ipv4.conf.all.mc_forwarding = 0
 net.ipv6.conf.all.mc_forwarding = 0
-EOF
+EOF_XYZ_XYZ
 
     # Per-VLAN hardening, emitted in a loop so adding a VLAN needs no edits.
     printf '\n#--- Per-VLAN interface hardening -----------------------------------------\n'
     for def in "${VLAN_DEFS[@]}"; do
       IFS=':' read -r id name v4 pool sid class <<<"$def"
       local ifn="${VLAN_IF_PREFIX}${id}"
-      cat <<EOF
+      cat <<EOF_XYZ
 # VLAN ${id} (${name})
 net.ipv6.conf.${ifn}.accept_ra = 0
 net.ipv6.conf.${ifn}.autoconf = 0
 net.ipv6.conf.${ifn}.accept_redirects = 0
 net.ipv4.conf.${ifn}.send_redirects = 0
-EOF
+EOF_XYZ
     done
   } > "${ROOT}${f}"
 
@@ -495,13 +495,13 @@ EOF
   # module is present at boot before sysctl runs.
   local m="/etc/modules-load.d/router.conf"
   prepare "$m"
-  cat > "${ROOT}${m}" <<'EOF'
+  cat > "${ROOT}${m}" <<'EOF_XYZ'
 # Loaded early so /etc/sysctl.d/99-router.conf can set nf_conntrack_* keys.
 nf_conntrack
 nf_conntrack_ftp
 dummy
 8021q
-EOF
+EOF_XYZ
   ok "wrote ${m}"
 
   run modprobe nf_conntrack
@@ -525,7 +525,7 @@ configure_netplan() {
   if [ -d /etc/cloud ] || [ "$DRY_RUN" = "yes" ]; then
     prepare "$ci"
     printf 'network: {config: disabled}\n' > "${ROOT}${ci}"
-    ok "disabled cloud-init network management"
+    ok "disabled cloud-init network administrator"
   fi
 
   # Move any pre-existing netplan YAML out of the way. Two files that both
@@ -548,8 +548,9 @@ configure_netplan() {
   prepare "$f"
 
   {
-    cat <<EOF
-# Managed by setup-gateway-router.sh - do not edit by hand.
+    cat <<EOF_XYZ
+# Managed by setup-gateway-router.sh
+
 # Apply with:  netplan try   (auto-reverts after 120s if you lose the link)
 network:
   version: 2
@@ -616,7 +617,7 @@ network:
   # comes from the WAN side only.
   # -----------------------------------------------------------------------
   vlans:
-EOF
+EOF_XYZ
 
     for def in "${VLAN_DEFS[@]}"; do
       IFS=':' read -r id name v4 pool sid class <<<"$def"
@@ -624,7 +625,7 @@ EOF
       local gua ula
       gua=$(v6_host "$(v6_subnet "$IPV6_GUA_PREFIX" "$sid")" 1)
       ula=$(v6_host "$(v6_subnet "$IPV6_ULA_PREFIX" "$sid")" 1)
-      cat <<EOF
+      cat <<EOF_XYZ
     ${ifn}:
       # VLAN ${id} - ${name} (${class} zone)
       id: ${id}
@@ -639,7 +640,7 @@ EOF
         - ${v4}
         - ${gua}/64
         - ${ula}/64
-EOF
+EOF_XYZ
     done
   } > "${ROOT}${f}"
 
@@ -666,8 +667,9 @@ configure_dhcpv6_pd() {
 
   local d="/etc/systemd/network/10-netplan-${WAN_IF}.network.d"
   mkdir -p "${ROOT}${d}"
-  cat > "${ROOT}${d}/prefix-delegation.conf" <<EOF
+  cat > "${ROOT}${d}/prefix-delegation.conf" <<EOF_XYZ
 # Managed by setup-gateway-router.sh
+
 # Request a prefix from the ISP and hand /64s out of it to the VLANs.
 [Network]
 DHCP=ipv4
@@ -682,7 +684,7 @@ WithoutRA=solicit
 [DHCPPrefixDelegation]
 UplinkInterface=:self
 Announce=no
-EOF
+EOF_XYZ
 
   # Each downstream interface claims one subnet out of the delegated prefix.
   local subnet_index=0
@@ -691,8 +693,11 @@ EOF
     local ifn="${VLAN_IF_PREFIX}${id}"
     local dd="/etc/systemd/network/10-netplan-${ifn}.network.d"
     mkdir -p "${ROOT}${dd}"
-    cat > "${ROOT}${dd}/prefix-delegation.conf" <<EOF
-# Managed by setup-gateway-router.sh - VLAN ${id} (${name})
+    cat > "${ROOT}${dd}/prefix-delegation.conf" <<EOF_XYZ
+# Managed by setup-gateway-router.sh
+
+# VLAN ${id} (${name})
+
 [Network]
 DHCPPrefixDelegation=yes
 
@@ -700,7 +705,7 @@ DHCPPrefixDelegation=yes
 UplinkInterface=${WAN_IF}
 SubnetId=${subnet_index}
 Announce=no
-EOF
+EOF_XYZ
     subnet_index=$((subnet_index + 1))
   done
 
@@ -725,14 +730,15 @@ configure_resolved() {
   # the DNS path is worth more than resolved's per-link features.
   local d="/etc/systemd/resolved.conf.d"
   mkdir -p "${ROOT}${d}"
-  cat > "${ROOT}${d}/99-router.conf" <<'EOF'
+  cat > "${ROOT}${d}/99-router.conf" <<'EOF_XYZ'
 # Managed by setup-gateway-router.sh
-# Kept for reference in case systemd-resolved is re-enabled: this frees
-# 127.0.0.53:53 so named can bind the wildcard address.
+
+# Keep for reference in case systemd-resolved gets enabled. This will
+# free 127.0.0.53:53 so named.service can bind to the wildcard address.
 [Resolve]
 DNSStubListener=no
 DNS=127.0.0.1
-EOF
+EOF_XYZ
 
   local rc="/etc/resolv.conf"
   backup_file "$rc"
@@ -746,14 +752,15 @@ EOF
     # file pointing at our own named instance.
     rm -f "$rc"
   fi
-  cat > "${ROOT}${rc}" <<EOF
+  cat > "${ROOT}${rc}" <<EOF_XYZ
 # Managed by setup-gateway-router.sh
+
 # The router resolves through its own BIND instance on the loopback.
 nameserver 127.0.0.1
 nameserver ::1
 search ${DOMAIN}
 options edns0 trust-ad timeout:2 attempts:2
-EOF
+EOF_XYZ
   ok "resolv.conf points at local named"
 }
 
@@ -774,10 +781,10 @@ EOF
 interzone_policy() {
   local src="$1" dst="$2"
   case "$src" in
-    mgmt) echo accept ;;            # management reaches all
+    admin) echo accept ;;            # administrator reaches all
     trusted)
       case "$dst" in
-        mgmt) echo drop ;;          # users cannot reach mgmt
+        admin) echo drop ;;          # users cannot reach admin
         *) echo accept ;;           # users reach iot and dmz
       esac ;;
     restricted) echo drop ;;        # iot is fully isolated
@@ -803,9 +810,10 @@ configure_nftables() {
   v6_list="${IPV6_GUA_PREFIX}, ${IPV6_ULA_PREFIX}"
 
   {
-    cat <<EOF
+    cat <<EOF_XYZ
 #!/usr/sbin/nft -f
-# Managed by setup-gateway-router.sh - do not edit by hand.
+# Managed by setup-gateway-router.sh
+
 # Reload with:  nft -f /etc/nftables.conf   (validate first: nft -c -f ...)
 
 # Start from a clean slate so a reload is idempotent.
@@ -816,7 +824,7 @@ flush ruleset
 # below. Defines are textual substitutions, so they work in any table.
 # ---------------------------------------------------------------------------
 define WAN_IF      = "${WAN_IF}"
-define MGMT_IF     = "${MGMT_IF}"
+define ADMIN_IF     = "${ADMIN_IF}"
 define LAN_IFS     = { ${NFT_LAN_IF_SET} }
 define LAN_V4_NETS = { ${v4_list} }
 define LAN_V6_NETS = { ${v6_list} }
@@ -840,9 +848,9 @@ table inet filter {
         flags interval
         elements = \$LAN_V6_NETS
     }
-EOF
+EOF_XYZ
 
-    cat <<'EOF'
+    cat <<'EOF_XYZ'
 
     # Source addresses that must never arrive from the uplink.
     set bogon_v4 {
@@ -980,9 +988,9 @@ EOF
         iifname $LAN_IFS ip6 saddr != @lan_v6 ip6 saddr != fe80::/10 \
             counter drop comment "LAN v6 spoof"
     }
-EOF
+EOF_XYZ
 
-    cat <<EOF
+    cat <<EOF_XYZ
 
     # -----------------------------------------------------------------------
     # INPUT - packets terminating on the router.
@@ -1007,23 +1015,23 @@ EOF
         # Internal VLANs get DNS and DHCP.
         iifname \$LAN_IFS jump lan_services
 
-        # --- Management VLAN only ------------------------------------------
-        # OSPF adjacencies are confined to the management VLAN, matching the
+        # --- Administrator VLAN only ------------------------------------------
+        # OSPF adjacencies are confined to the administrator VLAN, matching the
         # FRR configuration where every other VLAN is passive.
-        iifname \$MGMT_IF ip protocol 89 counter accept comment "OSPFv2"
-        iifname \$MGMT_IF meta l4proto 89 ip6 saddr fe80::/10 \\
+        iifname \$ADMIN_IF ip protocol 89 counter accept comment "OSPFv2"
+        iifname \$ADMIN_IF meta l4proto 89 ip6 saddr fe80::/10 \\
             counter accept comment "OSPFv3"
 
         # SSH with a per-source rate limiter. The 'add @set { ... limit rate
         # over ... }' form only drops sources that exceed the rate, so normal
         # logins pass straight through to the accept below.
-        iifname \$MGMT_IF tcp dport 22 ct state new \\
+        iifname \$ADMIN_IF tcp dport 22 ct state new \\
             add @ssh_flood4 { ip saddr limit rate over 6/minute burst 6 packets } \\
             counter drop comment "SSH brute force (v4)"
-        iifname \$MGMT_IF tcp dport 22 ct state new \\
+        iifname \$ADMIN_IF tcp dport 22 ct state new \\
             add @ssh_flood6 { ip6 saddr limit rate over 6/minute burst 6 packets } \\
             counter drop comment "SSH brute force (v6)"
-        iifname \$MGMT_IF tcp dport 22 counter accept comment "SSH from mgmt"
+        iifname \$ADMIN_IF tcp dport 22 counter accept comment "SSH from admin"
 
         # The uplink has its own, much narrower, policy.
         iifname \$WAN_IF jump wan_input
@@ -1069,7 +1077,7 @@ EOF
         # IPv4 leaves NAT'ed, IPv6 leaves routed; the rule is the same.
         iifname \$LAN_IFS oifname \$WAN_IF counter accept comment "LAN to Internet"
 
-EOF
+EOF_XYZ
 
     # ---- Inter-VLAN matrix, generated from the zone classes ---------------
     printf '        # --- Inter-VLAN policy (generated from VLAN_DEFS zone classes) ----\n'
@@ -1111,7 +1119,7 @@ EOF
       done
     fi
 
-    cat <<'EOF'
+    cat <<'EOF_XYZ'
 
         # Anything not matched above is denied. Sample the drops.
         limit rate 5/minute burst 10 packets \
@@ -1137,7 +1145,7 @@ EOF
 table ip nat {
     chain prerouting {
         type nat hook prerouting priority dstnat; policy accept;
-EOF
+EOF_XYZ
 
     if [ ${#PUBLISHED_SERVICES[@]} -eq 0 ]; then
       printf '        # (no DNAT rules configured)\n'
@@ -1150,7 +1158,7 @@ EOF
       done
     fi
 
-    cat <<'EOF'
+    cat <<'EOF_XYZ'
     }
 
     chain postrouting {
@@ -1168,7 +1176,7 @@ EOF
         # iifname $LAN_IFS oifname $LAN_IFS ip daddr $LAN_V4_NETS counter masquerade
     }
 }
-EOF
+EOF_XYZ
   } > "${ROOT}${f}"
 
   chmod 600 "${ROOT}${f}"
@@ -1215,14 +1223,15 @@ generate_tsig_key() {
 
   mkdir -p "${ROOT}/etc/bind/keys"
   prepare "$keyfile"
-  cat > "${ROOT}${keyfile}" <<EOF
+  cat > "${ROOT}${keyfile}" <<EOF_XYZ
 // Managed by setup-gateway-router.sh
+
 // Shared with /etc/kea/kea-dhcp-ddns.conf. Both files must be kept private.
 key "${DDNS_KEY_NAME}" {
     algorithm ${DDNS_KEY_ALGO};
     secret "${DDNS_KEY_SECRET}";
 };
-EOF
+EOF_XYZ
   chmod 640 "${ROOT}${keyfile}"
   # named must read it; nothing else should.
   if [ "$DRY_RUN" != "yes" ] && getent passwd bind >/dev/null 2>&1; then
@@ -1267,8 +1276,9 @@ configure_kea_dhcp4() {
   hooks_dir=$(kea_hooks_dir || true)
 
   {
-    cat <<EOF
-// Managed by setup-gateway-router.sh - do not edit by hand.
+    cat <<EOF_XYZ
+// Managed by setup-gateway-router.sh
+
 // Validate with:  kea-dhcp4 -t /etc/kea/kea-dhcp4.conf
 {
 "Dhcp4": {
@@ -1336,21 +1346,21 @@ configure_kea_dhcp4() {
 
     // Drop rather than answer requests relayed from unknown networks.
     "authoritative": true,
-EOF
+EOF_XYZ
 
     # The lease_cmds hook is what makes `kea-shell lease4-get-all` work. Only
     # reference it if the library is actually present on this architecture.
     if [ -n "$hooks_dir" ] && { [ -f "${hooks_dir}/libdhcp_lease_cmds.so" ] || [ "$DRY_RUN" = "yes" ]; }; then
-      cat <<EOF
+      cat <<EOF_XYZ
 
     // Runtime lease inspection and manipulation over the control socket.
     "hooks-libraries": [
         { "library": "${hooks_dir}/libdhcp_lease_cmds.so" }
     ],
-EOF
+EOF_XYZ
     fi
 
-    cat <<EOF
+    cat <<EOF_XYZ
 
     // -------------------------------------------------------------------
     // Dynamic DNS. Kea does not talk to BIND directly: it hands change
@@ -1396,7 +1406,7 @@ EOF
     // arriving on the wrong VLAN cannot be answered from the wrong pool.
     // -------------------------------------------------------------------
     "subnet4": [
-EOF
+EOF_XYZ
 
     local sep=""
     for def in "${VLAN_DEFS[@]}"; do
@@ -1409,7 +1419,7 @@ EOF
       pool_end="${pool##*-}"
 
       printf '%s' "$sep"; sep=$',\n'
-      cat <<EOF
+      cat <<EOF_XYZ
         {
             // ---- VLAN ${id} : ${name} (${class}) ----
             // Subnet ids are stable identifiers used in logs, host
@@ -1436,10 +1446,10 @@ EOF
                 // }
             ]
         }
-EOF
+EOF_XYZ
     done
 
-    cat <<'EOF'
+    cat <<'EOF_XYZ'
 
     ],
 
@@ -1471,7 +1481,7 @@ EOF
     ]
 }
 }
-EOF
+EOF_XYZ
   } > "${ROOT}${f}"
 
   chmod 640 "${ROOT}${f}"
@@ -1498,8 +1508,9 @@ configure_kea_dhcp6() {
   hooks_dir=$(kea_hooks_dir || true)
 
   {
-    cat <<EOF
-// Managed by setup-gateway-router.sh - do not edit by hand.
+    cat <<EOF_XYZ
+// Managed by setup-gateway-router.sh
+
 // Validate with:  kea-dhcp6 -t /etc/kea/kea-dhcp6.conf
 {
 "Dhcp6": {
@@ -1551,18 +1562,18 @@ configure_kea_dhcp6() {
         "time": 0,
         "persist": true
     },
-EOF
+EOF_XYZ
 
     if [ -n "$hooks_dir" ] && { [ -f "${hooks_dir}/libdhcp_lease_cmds.so" ] || [ "$DRY_RUN" = "yes" ]; }; then
-      cat <<EOF
+      cat <<EOF_XYZ
 
     "hooks-libraries": [
         { "library": "${hooks_dir}/libdhcp_lease_cmds.so" }
     ],
-EOF
+EOF_XYZ
     fi
 
-    cat <<EOF
+    cat <<EOF_XYZ
 
     // Same DDNS forwarder as DHCPv4, so a dual-stack host ends up with
     // matching A and AAAA records under one name.
@@ -1589,7 +1600,7 @@ EOF
     ],
 
     "subnet6": [
-EOF
+EOF_XYZ
 
     local sep=""
     for def in "${VLAN_DEFS[@]}"; do
@@ -1606,7 +1617,7 @@ EOF
       p_end=$(v6_host "$gua_net" 8191)
 
       printf '%s' "$sep"; sep=$',\n'
-      cat <<EOF
+      cat <<EOF_XYZ
         {
             // ---- VLAN ${id} : ${name} (${class}) ----
             // Reuse the DHCPv4 subnet id so the two families line up in logs.
@@ -1633,10 +1644,10 @@ EOF
                 // }
             ]
         }
-EOF
+EOF_XYZ
     done
 
-    cat <<'EOF'
+    cat <<'EOF_XYZ'
 
     ],
 
@@ -1658,7 +1669,7 @@ EOF
     ]
 }
 }
-EOF
+EOF_XYZ
   } > "${ROOT}${f}"
 
   chmod 640 "${ROOT}${f}"
@@ -1677,8 +1688,9 @@ configure_kea_ddns() {
   prepare "$f"
 
   {
-    cat <<EOF
-// Managed by setup-gateway-router.sh - do not edit by hand.
+    cat <<EOF_XYZ
+// Managed by setup-gateway-router.sh
+
 // Contains the TSIG secret: keep mode 640.
 {
 "DhcpDdns": {
@@ -1727,7 +1739,7 @@ configure_kea_ddns() {
     // -------------------------------------------------------------------
     "reverse-ddns": {
         "ddns-domains": [
-EOF
+EOF_XYZ
 
     local sep=""
     for def in "${VLAN_DEFS[@]}"; do
@@ -1735,31 +1747,31 @@ EOF
       local zone
       zone=$(v4_arpa_zone "$(v4_network "$v4")")
       printf '%s' "$sep"; sep=$',\n'
-      cat <<EOF
+      cat <<EOF_XYZ
             {
                 // VLAN ${id} (${name})
                 "name": "${zone}.",
                 "key-name": "${DDNS_KEY_NAME}",
                 "dns-servers": [ { "ip-address": "127.0.0.1", "port": 53 } ]
             }
-EOF
+EOF_XYZ
     done
 
     for prefix in "$IPV6_GUA_PREFIX" "$IPV6_ULA_PREFIX"; do
       local zone6
       zone6=$(v6_arpa_zone "$prefix")
       printf '%s' "$sep"; sep=$',\n'
-      cat <<EOF
+      cat <<EOF_XYZ
             {
                 // ${prefix}
                 "name": "${zone6}.",
                 "key-name": "${DDNS_KEY_NAME}",
                 "dns-servers": [ { "ip-address": "127.0.0.1", "port": 53 } ]
             }
-EOF
+EOF_XYZ
     done
 
-    cat <<'EOF'
+    cat <<'EOF_XYZ'
 
         ]
     },
@@ -1781,7 +1793,7 @@ EOF
     ]
 }
 }
-EOF
+EOF_XYZ
   } > "${ROOT}${f}"
 
   chmod 640 "${ROOT}${f}"
@@ -1859,8 +1871,9 @@ configure_bind_options() {
   acl_body+="        ${IPV6_GUA_PREFIX};"$'\n'
   acl_body+="        ${IPV6_ULA_PREFIX};"$'\n'
 
-  cat > "${ROOT}${f}" <<EOF
-// Managed by setup-gateway-router.sh - do not edit by hand.
+  cat > "${ROOT}${f}" <<EOF_XYZ
+// Managed by setup-gateway-router.sh
+
 // Validate with:  named-checkconf -z
 
 // ---------------------------------------------------------------------------
@@ -1870,9 +1883,9 @@ configure_bind_options() {
 acl "internal" {
 ${acl_body}};
 
-acl "mgmt" {
+acl "admin" {
         127.0.0.1; ::1;
-        $(v4_network "$MGMT_V4_CIDR");   // management VLAN ${MGMT_VLAN_ID}
+        $(v4_network "$ADMIN_V4_CIDR");   // administrator VLAN ${ADMIN_VLAN_ID}
 };
 
 options {
@@ -1990,7 +2003,7 @@ logging {
         // Uncomment temporarily to log every query - very high volume.
         // category queries       { default_log; };
 };
-EOF
+EOF_XYZ
   ok "wrote ${f}"
 
   # Log directory, owned by named.
@@ -2008,8 +2021,8 @@ configure_bind_zones() {
   prepare "$f"
 
   {
-    cat <<EOF
-// Managed by setup-gateway-router.sh - do not edit by hand.
+    cat <<EOF_XYZ
+// Managed by setup-gateway-router.sh
 
 // The TSIG key kea-dhcp-ddns uses to authenticate its DNS UPDATEs.
 include "/etc/bind/keys/${DDNS_KEY_NAME}.key";
@@ -2033,7 +2046,7 @@ zone "${DOMAIN}" {
         allow-transfer { none; };
         notify no;
 };
-EOF
+EOF_XYZ
 
     # --- IPv4 reverse zones, one per VLAN ---------------------------------
     printf '\n// --- IPv4 reverse zones ---------------------------------------------------\n'
@@ -2041,7 +2054,7 @@ EOF
       IFS=':' read -r id name v4 pool sid class <<<"$def"
       local zone
       zone=$(v4_arpa_zone "$(v4_network "$v4")")
-      cat <<EOF
+      cat <<EOF_XYZ
 zone "${zone}" {
         // VLAN ${id} (${name})
         type primary;
@@ -2050,7 +2063,7 @@ zone "${zone}" {
         allow-transfer { none; };
         notify no;
 };
-EOF
+EOF_XYZ
     done
 
     # --- IPv6 reverse zones, one per /48 ----------------------------------
@@ -2059,7 +2072,7 @@ EOF
     for prefix in "$IPV6_GUA_PREFIX" "$IPV6_ULA_PREFIX"; do
       local zone6
       zone6=$(v6_arpa_zone "$prefix")
-      cat <<EOF
+      cat <<EOF_XYZ
 zone "${zone6}" {
         // ${prefix}
         type primary;
@@ -2068,10 +2081,10 @@ zone "${zone6}" {
         allow-transfer { none; };
         notify no;
 };
-EOF
+EOF_XYZ
     done
 
-    cat <<'EOF'
+    cat <<'EOF_XYZ'
 
 // ---------------------------------------------------------------------------
 // Note on leakage: BIND already serves the RFC 6303 / RFC 8375 empty zones
@@ -2080,7 +2093,7 @@ EOF
 // instead of being sent to the root servers. Our own /48 zone above is more
 // specific than d.f.ip6.arpa, so it still wins. Do not redeclare the empty
 // zones here - use "empty-zones-enable no" only if you have a reason to.
-EOF
+EOF_XYZ
   } > "${ROOT}${f}"
   ok "wrote ${f}"
 
@@ -2098,13 +2111,14 @@ EOF
     local ns_v4 ns_v6
     ns_v4=$(v4_addr "$LOOPBACK_V4")
     ns_v6="${LOOPBACK_V6%%/*}"
-    cat <<EOF
+    cat <<EOF_XYZ
 \$TTL 3600
 \$ORIGIN ${DOMAIN}.
 ;
-; Managed by setup-gateway-router.sh. THIS FILE IS DYNAMIC: named rewrites
-; it from the journal. Edit it only via 'nsupdate', or stop named, edit, and
-; delete the matching .jnl file before starting again.
+; Managed by setup-gateway-router.sh
+; THIS FILE IS DYNAMIC: named rewrites it from the journal. Edit it only
+; via 'nsupdate', or stop named, edit, and delete the matching .jnl file
+; before starting again.
 ;
 @       IN SOA  ns1.${DOMAIN}. hostmaster.${DOMAIN}. (
                 ${ZONE_SERIAL}   ; serial (dynamic updates bump this)
@@ -2118,16 +2132,16 @@ EOF
 ; --- The router itself ----------------------------------------------------
 ; ns1 points at the loopback address, which stays up even if a physical
 ; interface goes down.
-EOF
+EOF_XYZ
     printf '%-24s IN A     %s\n' "ns1" "$ns_v4"
     printf '%-24s IN AAAA  %s\n' "ns1" "$ns_v6"
     printf '%-24s IN A     %s\n' "$ROUTER_HOSTNAME" "$ns_v4"
     printf '%-24s IN AAAA  %s\n' "$ROUTER_HOSTNAME" "$ns_v6"
-    cat <<'EOF'
+    cat <<'EOF_XYZ'
 
 ; --- Per-VLAN gateway addresses -------------------------------------------
 ; Handy for monitoring and for pinning a test to one specific interface.
-EOF
+EOF_XYZ
     for def in "${VLAN_DEFS[@]}"; do
       IFS=':' read -r id name v4 pool sid class <<<"$def"
       local gw gua ula
@@ -2151,7 +2165,7 @@ EOF
     gw=$(v4_addr "$v4")
     rz="${ZONE_DIR}/db.${zone}"
     prepare "$rz"
-    cat > "${ROOT}${rz}" <<EOF
+    cat > "${ROOT}${rz}" <<EOF_XYZ
 \$TTL 3600
 \$ORIGIN ${zone}.
 ;
@@ -2164,7 +2178,7 @@ EOF
 
 ; The gateway's own PTR, written with an absolute owner name.
 $(ptr_name "$gw")  IN PTR  gw-${name}.${DOMAIN}.
-EOF
+EOF_XYZ
     ok "wrote ${rz}"
   done
 
@@ -2177,7 +2191,7 @@ EOF
     rz6="${ZONE_DIR}/db.${zone6}"
     prepare "$rz6"
     {
-      cat <<EOF
+      cat <<EOF_XYZ
 \$TTL 3600
 \$ORIGIN ${zone6}.
 ;
@@ -2190,7 +2204,7 @@ EOF
         IN NS   ns1.${DOMAIN}.
 
 ; --- Gateway PTRs ---------------------------------------------------------
-EOF
+EOF_XYZ
       for def in "${VLAN_DEFS[@]}"; do
         IFS=':' read -r id name v4 pool sid class <<<"$def"
         local addr
@@ -2261,8 +2275,9 @@ configure_frr() {
   # --- Which daemons to run ------------------------------------------------
   local d="/etc/frr/daemons"
   prepare "$d"
-  cat > "${ROOT}${d}" <<EOF
-# Managed by setup-gateway-router.sh - do not edit by hand.
+  cat > "${ROOT}${d}" <<EOF_XYZ
+# Managed by setup-gateway-router.sh
+
 # Only enable what is actually used: every daemon is another listening
 # process and another config surface.
 
@@ -2301,19 +2316,20 @@ vtysh_enable=yes
 # Watchfrr restarts any daemon that dies.
 watchfrr_enable=yes
 watchfrr_options=""
-EOF
+EOF_XYZ
   ok "wrote ${d}"
 
   # --- vtysh: one integrated config file, not per-daemon files -------------
   local v="/etc/frr/vtysh.conf"
   prepare "$v"
-  cat > "${ROOT}${v}" <<EOF
+  cat > "${ROOT}${v}" <<EOF_XYZ
 # Managed by setup-gateway-router.sh
+
 # 'integrated-vtysh-config' makes "write memory" save everything to
 # /etc/frr/frr.conf instead of scattering zebra.conf, ospfd.conf and friends.
 service integrated-vtysh-config
 hostname ${ROUTER_HOSTNAME}
-EOF
+EOF_XYZ
   ok "wrote ${v}"
 
   # --- The routing configuration itself ------------------------------------
@@ -2321,8 +2337,9 @@ EOF
   prepare "$f"
 
   {
-    cat <<EOF
-! Managed by setup-gateway-router.sh - do not edit by hand.
+    cat <<EOF_XYZ
+! Managed by setup-gateway-router.sh
+
 ! Reload without dropping adjacencies:
 !   /usr/lib/frr/frr-reload.py --reload /etc/frr/frr.conf
 !
@@ -2342,7 +2359,7 @@ ipv6 forwarding
 ! ==========================================================================
 !
 interface ${LOOPBACK_IF}
- description router-id and stable management address
+ description router-id and stable administrator address
  ! Advertised into OSPF but never forms adjacencies - there is no neighbour
  ! on a dummy interface.
  ip ospf area ${OSPF_AREA}
@@ -2357,7 +2374,7 @@ interface ${WAN_IF}
  ! opt-in per interface, so silence here is all that is required.
  ipv6 nd suppress-ra
 !
-EOF
+EOF_XYZ
 
     for def in "${VLAN_DEFS[@]}"; do
       IFS=':' read -r id name v4 pool sid class <<<"$def"
@@ -2367,7 +2384,7 @@ EOF
       ula_net=$(v6_subnet "$IPV6_ULA_PREFIX" "$sid")
       gua_gw=$(v6_host "$gua_net" 1)
 
-      cat <<EOF
+      cat <<EOF_XYZ
 interface ${ifn}
  description VLAN ${id} ${name} (${class})
  !
@@ -2404,10 +2421,10 @@ interface ${ifn}
  ! --- OSPF -------------------------------------------------------------
  ip ospf area ${OSPF_AREA}
  ipv6 ospf6 area ${OSPF_AREA}
-EOF
-      if [ "$id" = "$MGMT_VLAN_ID" ]; then
-        cat <<EOF
- ! Management VLAN: adjacencies are allowed here, so a second router or an
+EOF_XYZ
+      if [ "$id" = "$ADMIN_VLAN_ID" ]; then
+        cat <<EOF_XYZ
+ ! Administrator VLAN: adjacencies are allowed here, so a second router or an
  ! L3 switch can peer with us. Authenticated so a random host on the VLAN
  ! cannot inject routes.
  ip ospf authentication message-digest
@@ -2421,19 +2438,19 @@ EOF
  ipv6 ospf6 priority 100
  ipv6 ospf6 hello-interval 5
  ipv6 ospf6 dead-interval 20
-EOF
+EOF_XYZ
       else
-        cat <<EOF
+        cat <<EOF_XYZ
  ! Client VLAN: the prefix is advertised into OSPF, but no hellos are sent,
  ! so an untrusted host cannot become an OSPF neighbour.
  ip ospf passive
  ipv6 ospf6 passive
-EOF
+EOF_XYZ
       fi
       printf '!\n'
     done
 
-    cat <<EOF
+    cat <<EOF_XYZ
 ! ==========================================================================
 ! OSPFv2 (IPv4)
 !
@@ -2452,7 +2469,7 @@ router ospf
  ! Never install a default route learned from a neighbour: ours comes from
  ! the WAN DHCP lease, and accepting someone else's would black-hole all
  ! outbound traffic if a downstream device started originating one.
- distribute-list DENY-DEFAULT in ${MGMT_IF}
+ distribute-list DENY-DEFAULT in ${ADMIN_IF}
 !
 ip prefix-list DENY-DEFAULT seq 5 deny 0.0.0.0/0
 ip prefix-list DENY-DEFAULT seq 10 permit 0.0.0.0/0 le 32
@@ -2465,10 +2482,10 @@ router ospf6
  default-information originate always metric 10
  log-adjacency-changes detail
 !
-EOF
+EOF_XYZ
 
     if [ "$ENABLE_BGP" = "yes" ]; then
-      cat <<EOF
+      cat <<EOF_XYZ
 ! ==========================================================================
 ! BGP - fill in ASNs and neighbours before enabling in production.
 ! ==========================================================================
@@ -2488,16 +2505,16 @@ router bgp 65000
   ! network ${IPV6_GUA_PREFIX}
  exit-address-family
 !
-EOF
+EOF_XYZ
     else
-      cat <<'EOF'
+      cat <<'EOF_XYZ'
 ! BGP is disabled (ENABLE_BGP=no). Set it to yes and edit this section if you
 ! need to peer with an upstream or a tunnel broker.
 !
-EOF
+EOF_XYZ
     fi
 
-    cat <<'EOF'
+    cat <<'EOF_XYZ'
 ! ==========================================================================
 ! Access control for the vty. FRR is configured from files here, so remote
 ! vty access is refused outright.
@@ -2506,7 +2523,7 @@ line vty
  exec-timeout 15 0
 !
 end
-EOF
+EOF_XYZ
   } > "${ROOT}${f}"
 
   # FRR runs as the 'frr' user and reads these at startup.
@@ -2541,18 +2558,23 @@ configure_identity() {
 
   local f="/etc/hosts"
   prepare "$f"
-  cat > "${ROOT}${f}" <<EOF
+  cat > "${ROOT}${f}" <<EOF_XYZ
 # Managed by setup-gateway-router.sh
-127.0.0.1       localhost
-::1             localhost ip6-localhost ip6-loopback
-ff02::1         ip6-allnodes
-ff02::2         ip6-allrouters
 
-# The router's own stable addresses. Present here as well as in DNS so that
-# name resolution still works if named is down.
+127.0.0.1   localhost
+
+# The following lines are desirable for IPv6 capable hosts
+# ::1         ip6-localhost ip6-loopback
+::1         localhost ip6-localhost ip6-loopback
+fe00::0     ip6-localnet
+ff00::0     ip6-mcastprefix
+ff02::1     ip6-allnodes
+ff02::2     ip6-allrouters
+
+# The following stable DNS router addresses will resolve even if named is not running
 $(v4_addr "$LOOPBACK_V4")   ${fqdn} ${ROUTER_HOSTNAME}
 ${LOOPBACK_V6%%/*}   ${fqdn} ${ROUTER_HOSTNAME}
-EOF
+EOF_XYZ
   ok "wrote ${f}"
 }
 
@@ -2698,7 +2720,7 @@ verify() {
 # -----------------------------------------------------------------------------
 
 print_summary() {
-  cat <<EOF
+  cat <<EOF_XYZ
 
 ===========================================================================
  ${ROUTER_HOSTNAME}.${DOMAIN} - dual-stack router
@@ -2737,7 +2759,7 @@ $(for def in "${VLAN_DEFS[@]}"; do
  Routing         vtysh -c 'show ip route'; vtysh -c 'show ipv6 route'
  OSPF            vtysh -c 'show ip ospf neighbor'
                  vtysh -c 'show ipv6 ospf6 neighbor'
- RA sanity       radvdump  (or: tcpdump -ni ${MGMT_IF} icmp6)
+ RA sanity       radvdump  (or: tcpdump -ni ${ADMIN_IF} icmp6)
  FRR reload      /usr/lib/frr/frr-reload.py --reload /etc/frr/frr.conf
 
 ---------------------------------------------------------------------------
@@ -2746,7 +2768,7 @@ $(for def in "${VLAN_DEFS[@]}"; do
  1. Replace the example prefixes. 2001:db8::/32 is documentation-only
     (RFC 3849) and will not route. Put your delegated GUA in
     IPV6_GUA_PREFIX and generate your own ULA:  openssl rand -hex 5
- 2. Change OSPF_AUTH_KEY, and remove the mgmt-VLAN OSPF adjacency entirely
+ 2. Change OSPF_AUTH_KEY, and remove the admin-VLAN OSPF adjacency entirely
     if there is no second router to peer with.
  3. Confirm the ISP's IPv6 handoff. If they use DHCPv6-PD rather than a
     static delegation, set ENABLE_DHCPV6_PD=yes - and be aware that the
@@ -2755,14 +2777,14 @@ $(for def in "${VLAN_DEFS[@]}"; do
     normally means a networkd-dispatcher or systemd hook that rewrites
     them on lease change, which is beyond this script.
  4. Harden SSH separately (keys only, no root login). The firewall limits
-    SSH to the management VLAN, but that is not a substitute.
+    SSH to the administrator VLAN, but that is not a substitute.
  5. Set up monitoring on the loopback address and alerting on the
     "nft *-drop" log prefixes.
  6. Test failure modes before you rely on them: unplug the WAN, reboot,
     and confirm the box comes back with both families working.
 
 ===========================================================================
-EOF
+EOF_XYZ
 }
 
 # -----------------------------------------------------------------------------
